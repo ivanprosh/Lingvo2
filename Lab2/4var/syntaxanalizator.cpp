@@ -20,6 +20,8 @@ SyntaxAnalizator::SyntaxAnalizator(const QString& input)
     }
     nonterm.removeDuplicates();
 
+    //qDebug() << nonterm;
+
     ProvideStates();
 }
 
@@ -27,6 +29,7 @@ void SyntaxAnalizator::ProvideStates()
 {
     int curStrNum = 1;
     states = new Tstate;
+    states->next = 0;
     //новая ситуация
     states->situation = new Tsituation;
     states->situation->pos = curStrNum*10+0;
@@ -38,21 +41,45 @@ void SyntaxAnalizator::ProvideStates()
     states->situation->rule.right.term = grammar.at(0).right(grammar.at(0).size()-pos).section("|",0,0).remove(QRegExp("[\:]|[\\s*]"));
     states->situation->rule.right.next = 0;
 
+    //qDebug() << states->situation->rule.right.term;
+
     loopState(states);
+}
+
+void addSituation(Tstate* input,QString rule,int index)
+{
+    int pos = rule.indexOf(QRegExp("[\\s*\:]"));
+    states->situation->pos = curStrNum*10+0;
+    states->situation->rule.left = grammar.at(0).left(pos);
+    states->situation->rule.right.term = grammar.at(0).right(grammar.at(0).size()-pos).section("|",0,0).remove(QRegExp("[\:]|[\\s*]"));
+    states->situation->rule.right.next = 0;
 }
 
 Tstate SyntaxAnalizator::loopState(Tstate* input)
 {
-    Tstate* curState = input;
-    while(curState)
+    Tsituation* cursit = input->situation;
+    //Tstate* curState = input;
+    QString str;
+    while(cursit)
     {
-        qDebug() << isnonterm(input->situation);
-        curState = curState->next;
+        str=findnonterm(cursit);
+        qDebug() << str;
+        if(str!="0")
+        {
+            //если нашли точку перед нетерминалом, найдем правило
+            for(int i=0;i<grammar.size();++i)
+            {
+                if(!grammar.at(i).contains(QRegExp(str+"\\s*:"))) continue;
+                qDebug() << grammar.at(i);
+                addSituation(input,grammar.at(i),i);
+            }
+        }
+        cursit = cursit->next;
     }
     return *input;
 }
 
-bool SyntaxAnalizator::isnonterm(Tsituation* sit)
+QString SyntaxAnalizator::findnonterm(Tsituation* sit)
 {
     Tsituation* cursit = sit;
     TList* rightrule = &cursit->rule.right;
@@ -60,11 +87,15 @@ bool SyntaxAnalizator::isnonterm(Tsituation* sit)
     while(cursit){
         foreach (QString str, nonterm) {
             while(rightrule){
-                if(rightrule->term.indexOf(str)==0) return 1;
+                if(rightrule->term.indexOf(str)==0 && !rightrule->marked) {
+                    rightrule->marked = 1;
+                    return str;
+                }
                 rightrule = rightrule->next;
             }
+            rightrule = &cursit->rule.right;
         }
         cursit = cursit->next;
     }
-    return 0;
+    return "0";
 }

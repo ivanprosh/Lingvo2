@@ -9,7 +9,9 @@
 
 struct TList{
     QString term;
+    bool marked;
     TList* next;
+    TList():marked(0),next(nullptr),term(""){}
 };
 struct TRule{
     QString left;
@@ -22,10 +24,12 @@ struct Tsituation{
     int pos;
     QString term;
     Tsituation *next;
+    Tsituation():next(nullptr),pos(0),term(""){}
 };
 struct Tstate{
     Tsituation* situation;
     Tstate* next;
+    Tstate():next(nullptr){}
 };
 
 class SyntaxAnalizator
@@ -38,7 +42,7 @@ public:
     SyntaxAnalizator(const QString& input);
     void ProvideStates();
     Tstate loopState(Tstate* input);
-    bool isnonterm(Tsituation* cursit);
+    QString findnonterm(Tsituation* cursit);
 };
 
 #endif // SYNTAXANALIZATOR_H
