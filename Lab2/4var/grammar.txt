@@ -1,11 +1,20 @@
-RESULT : RES | $
+RESULT : RES 
+RESULT : $
 RES : typedef TSTR
 RES : TSTR
-TSTR : struct ID<A1> { BODY } | struct { BODY } IDLIST | struct ID<A1> { BODY } IDLIST
-BODY : BODY DEFINITION; | BODY TSTR; | BODY struct{ BODY }
+TSTR : struct ID { BODY } 
+TSTR : struct { BODY } IDLIST 
+TSTR : struct ID { BODY } IDLIST
+BODY : BODY DEFINITION; 
+BODY : BODY TSTR;
+BODY : BODY struct{ BODY }
 DEFINITION : TYPENAME IDLIST
-TYPENAME : int | double | float | bool | char | signed int | unsigned int
+TYPENAME : int
+TYPENAME : double
+TYPENAME : float
+TYPENAME : bool
+TYPENAME : char
 IDLIST : IDLIST,ID
 IDLIST : ID
 ID : \w
-ID : ID\d | ID\w
+ID : \d
