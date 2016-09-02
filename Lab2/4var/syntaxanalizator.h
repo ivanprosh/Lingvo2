@@ -6,6 +6,17 @@
 #include <fstream>
 #include <sstream>
 #include <QFile>
+#include <QStack>
+
+//структура ячейки таблицы разбора
+struct Action{
+    int action;
+    int shift;
+    int reduce;
+    bool halt;
+    bool error;
+    Action():error(1),action(-1),shift(-1),reduce(-1),halt(0){}
+};
 
 struct TList{
     QString term;
@@ -27,9 +38,18 @@ struct Tsituation{
     Tsituation():next(nullptr),pos(0),term(""){}
 };
 struct Tstate{
+    int index;
     Tsituation* situation;
     Tstate* next;
     Tstate():next(nullptr){}
+    Tstate(int& count):next(nullptr){index=count++;}
+};
+struct TEdge{
+    QString term;
+    Tstate* from;
+    Tstate* to;
+    TEdge* next;
+    TEdge():next(nullptr),from(nullptr),to(nullptr){}
 };
 
 class SyntaxError
@@ -42,23 +62,36 @@ public:
 class SyntaxAnalizator
 {
     Tstate* states;
+    TEdge* edge;
+    Action** table;
     QStringList keywords,
                 grammar,
                 nonterm,
-                alphavit;
+                alphavit,
+                definitions;
+    int statescount;
+    QStack<QString> St_magazine;
+    QStack<int> St_states;
+
 public:  
     SyntaxAnalizator(const QString& input);
     void ProvideStates();
     void addSituation(Tstate* input,QString rule,int index);
+    void addedge(Tstate* input,QString symb,Tstate* output);
     void cross(Tstate* input, QString symb);
     bool notExistState(Tsituation* input);
+    Tstate* edgeExist(QString term,Tstate* input);
 
     bool loopStateSingleRound(Tstate* input); //возвращает 1, если было добавлено новое состояние на текущем круге
     Tstate* loopState(Tstate* input);
     QString findnonterm(Tsituation* cursit);
-    QString getSymb(QString stream,int pos);
+    QPair<QString,QString> getSymb(QString stream,int pos);
     bool isSitExist(Tstate* input,int index);
     bool SyntaxAnalizator::ProvideStatesSingleRound();
+
+    void CreateTable();
+    void InitTable();
+    void AnalyzeTable();
 };
 
 #endif // SYNTAXANALIZATOR_H

@@ -7,7 +7,6 @@ CONFIG -= app_bundle
 
 TEMPLATE = app
 
-
 deployment.path = $$OUT_PWD/
 deployment.files += input.txt \
                     grammar.txt
