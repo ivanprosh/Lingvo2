@@ -1,18 +1,5 @@
 RESULT : RES
-RES : typedef TSTR
-RES : TSTR
-TSTR : struct ID<1> { BODY } 
-TSTR : struct { BODY } IDLIST 
-TSTR : struct ID<1> { BODY } IDLIST
-BODY : BODY DEFINITION; 
-BODY : BODY TSTR;
-BODY : BODY struct{ BODY }
-DEFINITION : TYPENAME IDLIST
-TYPENAME : int
-TYPENAME : double
-TYPENAME : float
-TYPENAME : bool
-TYPENAME : char
+RES : float IDLIST;
 IDLIST : IDLIST,ID<1>
 IDLIST : ID<1>
 ID : \w

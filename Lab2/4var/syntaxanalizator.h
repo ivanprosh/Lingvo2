@@ -7,6 +7,7 @@
 #include <sstream>
 #include <QFile>
 #include <QStack>
+#include <iostream>
 
 //структура ячейки таблицы разбора
 struct Action{
@@ -78,20 +79,26 @@ public:
     void ProvideStates();
     void addSituation(Tstate* input,QString rule,int index);
     void addedge(Tstate* input,QString symb,Tstate* output);
+    void graph_update();
     void cross(Tstate* input, QString symb);
-    bool notExistState(Tsituation* input);
+    QPair<QString,int> countSymbInRule(int indexrule);
+    Tstate* SituationState(Tstate* inputstate,Tsituation* inputsit);
+    QVector<int> SituationPosExist(Tsituation* inputSit);
     Tstate* edgeExist(QString term,Tstate* input);
 
     bool loopStateSingleRound(Tstate* input); //возвращает 1, если было добавлено новое состояние на текущем круге
     Tstate* loopState(Tstate* input);
     QString findnonterm(Tsituation* cursit);
+    Tstate* findAlternativeState(const QVector<int> Sitstates,QString symb);
     QPair<QString,QString> getSymb(QString stream,int pos);
     bool isSitExist(Tstate* input,int index);
-    bool SyntaxAnalizator::ProvideStatesSingleRound();
+    void unique();
+    bool ProvideStatesSingleRound();
 
     void CreateTable();
     void InitTable();
     void AnalyzeTable();
+    void ShowTable();
 };
 
 #endif // SYNTAXANALIZATOR_H

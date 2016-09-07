@@ -1,11 +1,14 @@
 #include "syntaxanalizator.h"
 
-SyntaxAnalizator::SyntaxAnalizator(const QString& input):statescount(0)
+SyntaxAnalizator::SyntaxAnalizator(const QString& input):statescount(0),edge(nullptr)
 {
+    /*
     keywords
     << "typedef" << "struct" << "int" << "double" << "float"
-    << "bool"    << "char"   << "signed int" << "unsigned int"
+    << "bool"    << "char"
     << "," << "." << " " << ";" << "{" << "}" << "$";
+    */
+    keywords << "float" << "," << "." << " " << ";";
 
     QFile file(input);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
@@ -21,18 +24,20 @@ SyntaxAnalizator::SyntaxAnalizator(const QString& input):statescount(0)
     }
     nonterm.removeDuplicates();
 
-    alphavit << nonterm << keywords << "\\d" << "\\w";
+    alphavit << nonterm << keywords << "\\w";
     //qDebug() << nonterm;
 
-    edge = new TEdge;
+    //edge = new TEdge;
 
     ProvideStates();
 }
-//проверка отсутствия состояния с данной ситуацией
-bool SyntaxAnalizator::notExistState(Tsituation* input)
+//функция формирует вектор состояний, в которые включена ситуация со сдвинутой вправо позицией
+QVector<int> SyntaxAnalizator::SituationPosExist(Tsituation* inputSit)
 {
-    int pos = input->pos+input->rule.right.term.size();
-    if(input->rule.actions.term.size()) pos+=input->rule.actions.term.size()+2;
+    QVector<int> situations;
+    int pos = inputSit->pos+inputSit->rule.right.term.size();
+    if(inputSit->rule.actions.term.size()) pos+=inputSit->rule.actions.term.size()+2;
+
     Tstate* curstate = states;
     Tsituation* cursit;
 
@@ -40,63 +45,136 @@ bool SyntaxAnalizator::notExistState(Tsituation* input)
     while(curstate){
         cursit = curstate->situation;
         while(cursit){
-            if(cursit->pos==pos) {
-                //qDebug() << "State with rule "<< input->rule.left + ":" + input->rule.right.term <<"already exist!";
-                return 0;
+            //если совпали координаты ситуации
+            if((cursit->pos==pos)) {
+                situations.push_back(curstate->index);
             }
             cursit = cursit->next;
         }
         curstate = curstate->next;
     }
-    return 1;
+    return situations;
+
 }
+//проверка отсутствия состояния с данной ситуацией
+Tstate* SyntaxAnalizator::SituationState(Tstate* inputstate,Tsituation* inputSit)
+{
+    TEdge* curEdge= edge;
+
+    //если один и тот же символ встретился для одного и того же состояния
+    while(curEdge)
+    {
+        //отдельно проверяем для входного состояния
+        if((curEdge->from==inputstate) && curEdge->term==inputSit->rule.right.term ) return curEdge->to;
+        curEdge = curEdge->next;
+    }
+    return nullptr;
+}
+
+Tstate* SyntaxAnalizator::findAlternativeState(const QVector<int> Sitstates,QString symb)
+{
+    TEdge* curEdge= edge;
+    Tstate* curstate;
+    //если один и тот же символ встретился для одного и того же состояния
+    while(curEdge)
+    {
+        foreach (int index, Sitstates) {
+            curstate = states;
+            while(curstate){
+                if(curstate->index==index) break;
+                curstate = curstate->next;
+            }
+            if((curEdge->to==curstate ) && curEdge->term==symb ) return curEdge->to;
+        }
+        curEdge = curEdge->next;
+    }
+
+    return nullptr;
+}
+
 void SyntaxAnalizator::addedge(Tstate* input,QString symb,Tstate* output)
 {
-    TEdge* curedge = edge;
-    if(curedge->from){
-        while(curedge->next) {
+    if(!edge){
+        edge = new TEdge;
+        edge->from = input;
+        edge->to = output;
+        edge->term = symb;
+    } else {
+        TEdge* curedge = edge;
+        while(curedge) {
             if((curedge->from == input) && (curedge->to == output) && (curedge->term==symb)) return;
             curedge = curedge->next;
         }
+        curedge = edge;
+        while(curedge->next) curedge=curedge->next;
+
         curedge->next = new TEdge;
-        curedge = curedge->next;
+        curedge->next->from = input;
+        curedge->next->to = output;
+        curedge->next->term = symb;
     }
-    curedge->from = input;
-    curedge->to = output;
-    curedge->term = symb;
 }
 
 void SyntaxAnalizator::cross(Tstate* input, QString symb)
 {
     Tstate* startstate = input;
+    Tstate* check;
     Tsituation* cursit = input->situation;
     while(cursit){
         //если найден символ среди ситуаций
-        if((symb == cursit->rule.right.term) && notExistState(cursit)){
-            Tsituation* newsit = new Tsituation;
-            newsit->rule.left = cursit->rule.left;
-            newsit->pos = cursit->pos + cursit->rule.right.term.size();
-            if(cursit->rule.actions.term.size()) newsit->pos += cursit->rule.actions.term.size()+2;
-            QString str = grammar.at(cursit->pos/1000);
-            str = str.remove(QRegExp("^.*[\:][\\s*]"));
-            //qDebug() << str;
-            QPair<QString,QString> pair = getSymb(str,newsit->pos%1000);
-            newsit->rule.right.term = pair.first;
-            newsit->rule.actions.term = pair.second;
-            Tstate* newstate = new Tstate(statescount);
-            newstate->situation = newsit;
-            //замыкание для текущего состояния
-
-            qDebug() << "Add new state. Current rule:"<< newsit->rule.left<< ":" << newsit->rule.right.term;
-
-            addedge(input,symb,newstate);
-            newstate = loopState(newstate);
-            while(startstate->next)
+        if((symb == cursit->rule.right.term)){
+            if(symb == "\\w")
             {
-               startstate = startstate->next;
+                QString str;
             }
-            startstate->next = newstate;
+            QVector<int> DublicateStatesSit;
+            DublicateStatesSit = SituationPosExist(cursit);
+            //если в текущем состоянии нет рассматриваемой ситуации
+            if(DublicateStatesSit.indexOf(input->index)==-1){
+                //состояния с текущими координатами не существует, создаем
+                Tsituation* newsit = new Tsituation;
+                newsit->rule.left = cursit->rule.left;
+                newsit->pos = cursit->pos + cursit->rule.right.term.size();
 
+                if(cursit->rule.actions.term.size()) newsit->pos += cursit->rule.actions.term.size()+2;
+                QString str = grammar.at(cursit->pos/1000);
+                str = str.remove(QRegExp("^.*[\:][\\s*]"));
+                //qDebug() << str;
+                QPair<QString,QString> pair = getSymb(str,newsit->pos%1000);
+                newsit->rule.right.term = pair.first;
+                newsit->rule.actions.term = pair.second;
+
+                //проверка, есть ли в графе переход по данному символу из текущего состояния
+                check = SituationState(input,cursit);
+                if(!check){
+                    Tstate* newstate = findAlternativeState(DublicateStatesSit,symb);
+                    //если нет уже состояния, в который осуществляется подобный переход
+                    if(!newstate){
+                        newstate = new Tstate(statescount);
+                        qDebug() << "Add new state. Current rule:"<< newsit->rule.left<< ":" << newsit->rule.right.term;
+                        newstate->situation = newsit;
+                        //замыкание для текущего состояния
+
+                        newstate = loopState(newstate);
+                        addedge(input,symb,newstate);
+
+                        while(startstate->next)
+                        {
+                            startstate = startstate->next;
+                        }
+                        startstate->next = newstate;
+                    } else {
+                        addedge(input,symb,newstate);
+                    }
+
+                } else {
+                    //если есть состояние в состав которого необходимо включить данную ситуацию
+                    Tsituation* sit=check->situation;
+                    while(sit->next)
+                        sit=sit->next;
+                    sit->next = newsit;
+                }
+            }
         }
         cursit=cursit->next;
     }
@@ -125,53 +203,138 @@ Tstate* SyntaxAnalizator::edgeExist(QString term,Tstate* input)
     }
     return nullptr;
 }
-//проерка уникальности имён
+//проверка уникальности имён
 void SyntaxAnalizator::unique()
 {
     definitions<<St_magazine.top();
     if(definitions.removeDuplicates()) throw(SyntaxError("ERR: duplicate definitions "));
+}
+//количество символов в правиле
+QPair<QString,int> SyntaxAnalizator::countSymbInRule(int indexrule)
+{
+    QPair<QString,int> result;
+    result.second = 0;
+    QVector<int> positions;
+    Tstate* curstate=states;
+    Tsituation* cursit;
+    //цикл по всем состояниям и по всем ситуациям
+    while(curstate){
+        cursit = curstate->situation;
+        while(cursit){
+            if((cursit->pos)/1000==indexrule) {
+                //если уже было состояние с этими координатами - не учитываем
+                if(!positions.contains(cursit->pos)) {
+                    positions.push_back(cursit->pos);
+                    result.second++;
+                    result.first = cursit->rule.left;
+                }
+            }
+            cursit = cursit->next;
+        }
+        curstate = curstate->next;
+    }
+    //символ конца строки не учитываем
+    result.second--;
+    return result;
 }
 
 void SyntaxAnalizator::AnalyzeTable()
 {
     //добавляем начальное состояние в стек
     St_states.push(states->index);
-    QString test = "struct a {int v;float asd,a,b,c}";
+    qDebug() << "Init action ";
+    QString input = "float asd,a,b,c;";
     //пока есть символы во входной цепочке
-    while(test.size())
+    while(!table[St_states.top()][alphavit.size()].halt)
     {
+        int removesize = 0;
         QString curSymb;
         int pos=0;
         //анализируем остаток цепочки на наличие ключевых слов в начале
         foreach (QString str, keywords) {
-            if(test.indexOf(str)==0) {
+            if(input.indexOf(str)==0) {
                 pos = alphavit.indexOf(str);
-                test = test.remove(0,str.size());
+                removesize = str.size();
+                //input = input.remove(0,str.size());
                 curSymb = str;
-                qDebug() << test;
+                qDebug() << "Keyword: "<< input << " Position" << pos;
             }
         }
         //если не нашли среди ключевых слов, проверяем на наличие цифры/буквы
         if(pos==0){
             QRegExp Definition("([A-z_]+\\d*)(.*)");
-            if(Definition.exactMatch(test)) {
+            if(Definition.exactMatch(input)) {
                 pos=alphavit.indexOf("\\w");
-                test = test.remove(0,Definition.cap(1).size());
-                qDebug() << "Reg: " << Definition.cap(1);
-                curSymb = Definition.cap(1);
+                removesize = Definition.cap(1).size();
+                //input = input.remove(0,Definition.cap(1).size());
+                qDebug() << "cursymb word: " << Definition.cap(1);
+                curSymb = "\\w";
             }
             else {
-                throw(SyntaxError("Error for analize: " + test));
+                if(!input.isEmpty()) throw(SyntaxError("Error for analize: " + input));
             }
         }
-        if(table[St_states.top(),pos]->action==1) unique();
-        if(table[St_states.top(),pos]->shift){
-            St_states.push(table[St_states.top(),pos]->shift);
+
+        if(table[St_states.top()][pos].action==1) unique();
+        if(table[St_states.top()][pos].shift>0){
+            St_states.push(table[St_states.top()][pos].shift);
             St_magazine.push(curSymb);
+            input = input.remove(0,removesize);
         }
-        else if(table[St_states.top(),pos]->reduce){
+        else if(table[St_states.top()][alphavit.size()].reduce>0){
+            QPair<QString,int> ReduceRule = countSymbInRule(table[St_states.top()][alphavit.size()].reduce);
+            qDebug() << "Reduce count " << ReduceRule.second;
+            for(int i=0;i<ReduceRule.second;i++){
+                St_magazine.pop();
+                St_states.pop();
+            }
+            St_magazine.push(ReduceRule.first);
+            St_states.push(table[St_states.top()][alphavit.indexOf(ReduceRule.first)].shift);
+        }
+        else if(table[St_states.top()][pos].error) throw(SyntaxError("Error for analize: Not correct symbol in " + input));
+
+        qDebug() << "Magazine: " << St_magazine.top() << " States: " << St_states.top();
+        qDebug() << input;
+    }
+    St_states.pop();
+    St_magazine.pop();
+    if(St_states.empty() && St_magazine.empty()) qDebug() << "Success!";
+    else qDebug() << "Stack isn't empty, error in input stream ";
+
+}
+void SyntaxAnalizator::ShowTable()
+{
+    QFile file;
+    file.setFileName("output.txt");
+    file.open(QIODevice::ReadWrite | QIODevice::Text);
+    QTextStream out(&file);
+
+    out<<"\t";
+    for(int j=0;j<alphavit.size();j++)
+    {
+       out<< alphavit.at(j);
+       int countTab = alphavit.at(j).size()/4;
+       if(countTab>2) out << "\t";
+       else if(countTab>1) out << "\t" << "\t";
+       else out << "\t" << "\t" << "\t";
+    }
+    out<<endl;
+    //out.setFieldWidth(0);
+    for(int i=0;i<statescount;i++)
+    {
+        out << i << "\t" << ":";
+        for(int j=0;j<=alphavit.size();j++)
+        {
+            out << "\t" << "\t" << "\t" <<j;
+
+            if(table[i][j].shift>0) out<<"S"<<table[i][j].shift;
+            if(table[i][j].reduce>0) out<<"R"<<table[i][j].reduce;
+            if(table[i][j].action>0) out<<"A"<<table[i][j].action;
+            if(table[i][j].halt>0) out<<"H";
+            if(table[i][j].error) out <<"-";
 
         }
+        out << endl;
     }
 }
 
@@ -186,20 +349,25 @@ void SyntaxAnalizator::InitTable()
                 Tstate* output = edgeExist(cursit->rule.right.term,curstate);
                 //если есть переход в графе и правило не в конце цепочки
                 if(output){
-                    Action* curAction = &table[curstate->index][alphavit.indexOf(cursit->rule.right.term)];
-                    curAction->error = 0;
-                    curAction->shift = output->index;
-                    curAction->action = cursit->rule.actions.term.toInt();
+                    //Action* curAction = table[curstate->index][alphavit.indexOf(cursit->rule.right.term)];
+                    table[curstate->index][alphavit.indexOf(cursit->rule.right.term)].error = 0;
+                    //qDebug() << "Output ind. " << output->index << "alphavit.indexOf " << alphavit.indexOf(cursit->rule.right.term);
+                    table[curstate->index][alphavit.indexOf(cursit->rule.right.term)].shift = output->index;
+                    if(cursit->rule.actions.term!="") {
+                        //qDebug() << "!Act is " << cursit->rule.actions.term;
+                        table[curstate->index][alphavit.indexOf(cursit->rule.right.term)].action = cursit->rule.actions.term.toInt();
+                    }
+                    //qDebug() << "Row " << curstate->index << " Column" << alphavit.indexOf(cursit->rule.right.term);
                 }
             }
             else {
                 //символ конца строки
-                Action* curAction = &table[curstate->index][alphavit.size()];
-                curAction->error = false;
+                //Action* curAction = table[curstate->index][alphavit.size()];
+                table[curstate->index][alphavit.size()].error = false;
                 if(cursit->rule.left == "RESULT"){
-                    curAction->halt = true;
+                    table[curstate->index][alphavit.size()].halt = true;
                 } else {
-                    curAction->reduce = (cursit->pos)/1000;
+                    table[curstate->index][alphavit.size()].reduce = (cursit->pos)/1000;
                 }
             }
             cursit=cursit->next;
@@ -215,37 +383,34 @@ void SyntaxAnalizator::CreateTable()
     for(int i=0;i<statescount;i++)
         table[i] = new Action[alphavit.size()+1];
 }
+//функция проходит по существующим состояниям в графе и дополняет их ребрами между ситуациями состояний
+void SyntaxAnalizator::graph_update()
+{
+
+}
 
 void SyntaxAnalizator::ProvideStates()
 {
     int curStrNum = 0;
     states = new Tstate(statescount);
+    qDebug() << "statescount " << statescount;
 
     //начальная ситуация
     states->situation = new Tsituation;
     states->situation->pos = curStrNum*1000+0;
-    //states->situation->term = "";
     int pos = grammar.at(0).indexOf(QRegExp("[\\s*\:]"));
     states->situation->rule.left = grammar.at(0).left(pos);
     states->situation->rule.right.term = grammar.at(0).right(grammar.at(0).size()-pos).section("|",0,0).remove(QRegExp("[\:]|[\\s*]"));
     states->situation->rule.right.next = 0;
-    /*
-    curStrNum++;
-    //конечный символ $
-    states->situation->next = new Tsituation;
-    states->situation->next->pos = curStrNum*1000+0;
-    states->situation->next->term = "$";
-    pos = grammar.at(1).indexOf(QRegExp("[\\s*\:]"));
-    states->situation->next->rule.left = grammar.at(1).left(pos);
-    states->situation->next->rule.right.term = grammar.at(1).right(grammar.at(1).size()-pos).section("|",0,0).remove(QRegExp("[\:]|[\\s*]"));
-    states->situation->next->rule.right.next = 0;
-    */
+
     try{
         //выполняем начальное замыкание
         states = loopState(states);
 
         //для каждого состояния, выполнять пока не будет найдено новых переходов или состояний
         while(ProvideStatesSingleRound());
+
+        //
 //вывод на экран состояний
         int count=0;
         Tstate* curstate = states;
@@ -253,7 +418,7 @@ void SyntaxAnalizator::ProvideStates()
         TEdge* curedge=edge;
         QStringList st;
         while(curstate){
-            qDebug() << ++count << " State:";
+            qDebug() << count++ << " State:";
             cursit=curstate->situation;
             while(cursit){
                 qDebug() << "pos: "<< cursit->pos << ", rule: " << cursit->rule.left << ":" << cursit->rule.right.term;
@@ -271,6 +436,7 @@ void SyntaxAnalizator::ProvideStates()
 //конец промежуточного вывода
         CreateTable();
         InitTable();
+        ShowTable();
         AnalyzeTable();
     }
     catch(SyntaxError err)
@@ -287,7 +453,6 @@ QPair<QString,QString> SyntaxAnalizator::getSymb(QString stream,int pos=0)
 
     qDebug() << "Input string" << input_str;
     if(Raction.exactMatch(input_str)){
-        //qDebug() << "Regular action is" << Raction.cap(1);
         result.second = Raction.cap(1);
         input_str.remove(0,result.second.size()+2);
     }
@@ -348,7 +513,10 @@ bool SyntaxAnalizator::loopStateSingleRound(Tstate* input)
 {
     bool result=0;
     Tsituation* cursit = input->situation;
-    //Tstate* curState = input;
+
+    if(input->index==7){
+        QString str;
+    }
     QString str;
     while(cursit)
     {
@@ -370,6 +538,7 @@ bool SyntaxAnalizator::loopStateSingleRound(Tstate* input)
         }
         cursit = cursit->next;
     }
+
     return result;
 }
 
