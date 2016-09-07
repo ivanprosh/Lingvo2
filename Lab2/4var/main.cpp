@@ -10,12 +10,13 @@
 using namespace std;
 int no_of_errors;
 
+const QString input_name = "input.txt";
 const QString output_name = "output.txt";
 const QString grammar_name = "grammar.txt";
 
 int main()
 {
-    SyntaxAnalizator Analizator(grammar_name);
+    SyntaxAnalizator Analizator(grammar_name,input_name,output_name);
 
     return 0;
 }

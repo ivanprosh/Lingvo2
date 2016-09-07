@@ -73,9 +73,13 @@ class SyntaxAnalizator
     int statescount;
     QStack<QString> St_magazine;
     QStack<int> St_states;
+    QString inputString;
 
-public:  
-    SyntaxAnalizator(const QString& input);
+public:
+    QFile* outputFile;
+    QTextStream* out;
+    SyntaxAnalizator(const QString& grammar,const QString& input,const QString& output);
+    ~SyntaxAnalizator() {  outputFile->close(); }
     void ProvideStates();
     void addSituation(Tstate* input,QString rule,int index);
     void addedge(Tstate* input,QString symb,Tstate* output);
@@ -92,7 +96,7 @@ public:
     Tstate* findAlternativeState(const QVector<int> Sitstates,QString symb);
     QPair<QString,QString> getSymb(QString stream,int pos);
     bool isSitExist(Tstate* input,int index);
-    void unique();
+    void unique(QString word);
     bool ProvideStatesSingleRound();
 
     void CreateTable();
