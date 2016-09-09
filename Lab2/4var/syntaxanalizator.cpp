@@ -10,11 +10,9 @@ SyntaxAnalizator::SyntaxAnalizator(const QString& grammarFileName,const QString&
     << "bool"    << "char"
     << "," << "." << " " << ";" << "{" << "}" << "$";
 
-    //считываем данные входной строки
-    //outputfile(outputFileName);
     if (!outputFile->open(QIODevice::WriteOnly | QIODevice::Text))
         qWarning() << "Cann't open output file!";
-    //out(&outputfile);
+
     //считываем данные грамматики
     QFile grammarFile(grammarFileName);
     if (!grammarFile.open(QIODevice::ReadOnly | QIODevice::Text)){
@@ -91,7 +89,7 @@ Tstate* SyntaxAnalizator::SituationState(Tstate* inputstate,Tsituation* inputSit
     }
     return nullptr;
 }
-
+//поиск состояний с альтернативной ситуацией
 Tstate* SyntaxAnalizator::findAlternativeState(const QVector<int> Sitstates,QString symb)
 {
     TEdge* curEdge= edge;
@@ -112,7 +110,7 @@ Tstate* SyntaxAnalizator::findAlternativeState(const QVector<int> Sitstates,QStr
 
     return nullptr;
 }
-
+//добавление ребра в граф переходов
 void SyntaxAnalizator::addedge(Tstate* input,QString symb,Tstate* output)
 {
     if(!edge){
@@ -135,7 +133,7 @@ void SyntaxAnalizator::addedge(Tstate* input,QString symb,Tstate* output)
         curedge->next->term = symb;
     }
 }
-
+//функция ПЕРЕХОД(S,X)
 void SyntaxAnalizator::cross(Tstate* input, QString symb)
 {
     Tstate* startstate = input;
@@ -144,9 +142,6 @@ void SyntaxAnalizator::cross(Tstate* input, QString symb)
     while(cursit){
         //если найден символ среди ситуаций
         if((symb == cursit->rule.right.term)){
-            if(input->index==26) {
-                QString str;
-            }
             QVector<int> DublicateStatesSit;
             DublicateStatesSit = SituationPosExist(cursit);
             //если в текущем состоянии нет рассматриваемой ситуации
@@ -160,11 +155,8 @@ void SyntaxAnalizator::cross(Tstate* input, QString symb)
 
                 QString str = grammar.at(cursit->pos/1000);
                 str = str.remove(QRegExp("^.*[\:][\\s*]"));
-                //qDebug() << str;
                 QPair<QString,QString> pair = getSymb(str,newsit->pos%1000);
-                if(pair.second != ""){
-                    QString srt;
-                }
+
                 newsit->rule.right.term = pair.first;
                 newsit->rule.actions.term = pair.second;
 
@@ -205,7 +197,7 @@ void SyntaxAnalizator::cross(Tstate* input, QString symb)
         cursit=cursit->next;
     }
 }
-
+//генерация состояний
 bool SyntaxAnalizator::ProvideStatesSingleRound()
 {
     bool result=0;
@@ -220,6 +212,7 @@ bool SyntaxAnalizator::ProvideStatesSingleRound()
     }
     return result;
 }
+//проверка существования перехода в графе
 Tstate* SyntaxAnalizator::edgeExist(QString term,Tstate* input)
 {
     TEdge* cureedge=edge;
@@ -229,7 +222,7 @@ Tstate* SyntaxAnalizator::edgeExist(QString term,Tstate* input)
     }
     return nullptr;
 }
-//проверка уникальности имён
+//проверка уникальности имён (action - 1)
 void SyntaxAnalizator::unique(QString word)
 {
     definitions<<word;
@@ -269,7 +262,6 @@ void SyntaxAnalizator::AnalyzeTable()
     QString word;
     //добавляем начальное состояние в стек
     St_states.push(states->index);
-    qDebug() << "Init action ";
     //пока есть символы во входной цепочке
     while(!table[St_states.top()][alphavit.size()].halt)
     {
@@ -301,7 +293,7 @@ void SyntaxAnalizator::AnalyzeTable()
                 if(!inputString.isEmpty()) throw(SyntaxError("Error for analize: " + inputString));
             }
         }
-
+        //анализ необходимых действий для текущего символа в таблице
         if(table[St_states.top()][pos].action==1 || table[St_states.top()][alphavit.size()].action==1) unique(word);
         if(table[St_states.top()][pos].shift>0){
             St_states.push(table[St_states.top()][pos].shift);
@@ -329,6 +321,8 @@ void SyntaxAnalizator::AnalyzeTable()
     else *out << "Error: Stack isn't empty ";
 
 }
+#ifdef QT_DEBUG
+//вывод таблицы - используется для отладки
 void SyntaxAnalizator::ShowTable()
 {
     QFile file;
@@ -346,7 +340,6 @@ void SyntaxAnalizator::ShowTable()
        else out << "\t" << "\t" << "\t";
     }
     out<<endl;
-    //out.setFieldWidth(0);
     for(int i=0;i<statescount;i++)
     {
         out << i << "\t" << ":";
@@ -364,6 +357,7 @@ void SyntaxAnalizator::ShowTable()
         out << endl;
     }
 }
+#endif
 
 void SyntaxAnalizator::InitTable()
 {
@@ -438,6 +432,7 @@ void SyntaxAnalizator::ProvideStates()
         while(ProvideStatesSingleRound());
 
         //
+#ifdef QT_DEBUG
 //вывод на экран состояний
         int count=0;
         Tstate* curstate = states;
@@ -461,9 +456,12 @@ void SyntaxAnalizator::ProvideStates()
         }
         qDebug() << "States count: " << statescount;
 //конец промежуточного вывода
+#endif
         CreateTable();
         InitTable();
-        //ShowTable();
+#ifdef QT_DEBUG
+        ShowTable();
+#endif
         AnalyzeTable();
     }
     catch(SyntaxError err)
@@ -502,7 +500,7 @@ QPair<QString,QString> SyntaxAnalizator::getSymb(QString stream,int pos=0)
         throw SyntaxError("ERR: invalid symbol in rule: " + stream + " pos:" + QString::number(pos));
     }
 }
-
+//добавление ситуации
 void SyntaxAnalizator::addSituation(Tstate* input,QString rule,int index)
 {
     int pos = rule.indexOf(QRegExp("[\\s*\:]"));
@@ -524,7 +522,7 @@ void SyntaxAnalizator::addSituation(Tstate* input,QString rule,int index)
     qDebug() << "Index is " << index << ", new situation add: " << newsit->rule.left << ":" << newsit->rule.right.term;
 
 }
-
+//проверка существования ситуации
 bool SyntaxAnalizator::isSitExist(Tstate* input,int index)
 {
     Tsituation* cursit = input->situation;
@@ -535,7 +533,7 @@ bool SyntaxAnalizator::isSitExist(Tstate* input,int index)
     }
     return 0;
 }
-
+//функция ЗАМЫКАНИЕ(S)
 bool SyntaxAnalizator::loopStateSingleRound(Tstate* input)
 {
     bool result=0;
@@ -574,7 +572,7 @@ Tstate* SyntaxAnalizator::loopState(Tstate* input)
     while(loopStateSingleRound(input)){};
     return input;
 }
-
+//функция поиска нетерминала в ситуации
 QString SyntaxAnalizator::findnonterm(Tsituation* sit)
 {
     Tsituation* cursit = sit;
